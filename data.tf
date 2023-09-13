@@ -8,3 +8,10 @@ data "aws_ssm_parameter" "rabbitmq_PASS" {
 data "aws_kms_key" "key" {
   key_id = "alias/roboshop"
 }
+
+data "aws_ami" "ami_id" {
+  most_recent      = true
+  name_regex       = "pre-installed-ansible"
+  owners           = ["261454514620"]
+
+}
