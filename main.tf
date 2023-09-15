@@ -102,125 +102,22 @@ resource "aws_security_group" "rabbitmq" {
   tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_security_group" } )
 
 }
-resource "aws_launch_template" "launch_template" {
-  name                   = "${var.env}-${var.component}-launch_template"
-  image_id               = data.aws_ami.ami_id.id
-  instance_type          = "t3.small"
+resource "aws_instance" "rabbitmq_instance" {
+  ami = data.aws_ami.ami_id.image_id
+  instance_type = "t3.small"
+  subnet_id = var.subnet_ids[0]
   vpc_security_group_ids = [aws_security_group.rabbitmq.id]
-  user_data = base64encode(templatefile("${path.module}/user_data.sh",{ component= var.component, env= var.env }))
+  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
+  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
 
-  iam_instance_profile {
-    arn = aws_iam_instance_profile.para_instance_profile.arn
-  }
-
-  instance_market_options {
-    market_type = "spot"
-
-  }
-}
-resource "aws_autoscaling_group" "auto_scaling_group_rabbitmq" {
-  name                      = "${var.env}-${var.component}-autoscaling-group"
-  max_size                  = 2
-  min_size                  = 1
-  desired_capacity          = 1
-  force_delete              = true
-  vpc_zone_identifier       = var.subnet_ids
-
-  launch_template {
-    id = aws_launch_template.launch_template.id
-    version = "$Latest"
-  }
-
-  dynamic "tag" {
-    for_each              = local.all_tags
-    content {
-      key                 = tag.value.key
-      value               = tag.value.value
-      propagate_at_launch = true
-    }
-  }
+  tags = merge (local.common_tags, { Name = "${var.env}-${var.component}" } )
 
 }
-
-resource "aws_autoscaling_policy" "cpu-tracking-policy" {
-  name        = "whenCPULoadIncrease"
-  policy_type = "TargetTrackingScaling"
-  target_tracking_configuration {
-    predefined_metric_specification {
-      predefined_metric_type = "ASGAverageCPUUtilization"
-    }
-    target_value = 30.0
-  }
-  autoscaling_group_name = aws_autoscaling_group.auto_scaling_group_rabbitmq.name
-}
-
-// spot request instance
-
-#resource "aws_spot_instance_request" "rabbitmq_instance" {
-#  ami = data.aws_ami.ami_id.image_id
-#  instance_type = "t3.small"
-#  subnet_id = var.subnet_ids[0]
-#  wait_for_fulfillment = true
-#  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
-#  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
-#  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
-#
-#  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_instance" } )
-#
-#}
 
 resource "aws_route53_record" "rabbitmq_DNS_record" {
-  zone_id = "Z0388000D98EZSBQJXAU"
+  zone_id = "Z04623222IZKOJZ0BZ3PB"
   name    = "rabbitmq-${var.env}.chandupcs.online"
   type    = "A"
   ttl     = 30
-  records = [var.alb]
+  records = [aws_instance.rabbitmq_instance.private_ip]
 }
-
-// on demand instance
-
-#resource "aws_instance" "rabbitmq_instance" {
-#  ami = data.aws_ami.ami_id.image_id
-#  instance_type = "t3.small"
-#  subnet_id = var.subnet_ids[0]
-#  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
-#  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
-#  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
-#
-#  tags = merge (local.common_tags, { Name = "${var.env}-${var.component}" } )
-#
-#}
-
-
-#resource "aws_ssm_parameter" "rabbitmq_endpoint" {
-#  name  = "${var.env}.rabbitmq.endpoint"
-#  type  = "String"
-#  value = replace(replace(aws_mq_broker.rabbitmq.instances.0.endpoints.0,"amqps://", ""), ":5671", "")
-#}
-
-// as our application code for rabbitmq  doesn't designed to deal with secured protocol of rabbitmq we are going with ec2 instance rather than the mq_broker
-
-#resource "aws_mq_broker" "rabbitmq" {
-#  broker_name        = "${var.env}-rabbittmq_mq_broker"
-#  deployment_mode    = var.deployment_mode
-#  engine_type        = var.engine_type
-#  engine_version     = var.engine_version
-#  host_instance_type = var.host_instance_type
-#  security_groups    = [aws_security_group.rabbitmq.id]
-#  subnet_ids = var.deployment_mode == "SINGLE_INSTANCE" ? [var.subnet_ids[0]] : var.subnet_ids
-#
-##  configuration {
-##    id       = aws_mq_configuration.rabbitmq.id
-##    revision = aws_mq_configuration.rabbitmq.latest_revision
-##  }
-#
-#  encryption_options {
-#    use_aws_owned_key = false
-#    kms_key_id = data.aws_kms_key.key.arn
-#  }
-#
-#  user {
-#    username = data.aws_ssm_parameter.rabbitmq_ADMIN_USER.value
-#    password = data.aws_ssm_parameter.rabbitmq_ADMIN_USER.value
-#  }
-#}
