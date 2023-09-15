@@ -104,6 +104,50 @@ resource "aws_security_group" "rabbitmq" {
 }
 
 
+// spot request instance
+
+resource "aws_spot_instance_request" "rabbitmq_instance" {
+  ami = data.aws_ami.ami_id.image_id
+  instance_type = "t3.small"
+  subnet_id = var.subnet_ids[0]
+  wait_for_fulfillment = true
+  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
+  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
+  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
+
+  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_instance" } )
+
+}
+
+resource "aws_route53_record" "rabbitmq_DNS_record" {
+  zone_id = "Z0388000D98EZSBQJXAU"
+  name    = "rabbitmq-${var.env}.chandupcs.online"
+  type    = "A"
+  ttl     = 30
+  records = [aws_spot_instance_request.rabbitmq_instance.private_ip]
+}
+
+// on demand instance
+
+#resource "aws_instance" "rabbitmq_instance" {
+#  ami = data.aws_ami.ami_id.image_id
+#  instance_type = "t3.small"
+#  subnet_id = var.subnet_ids[0]
+#  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
+#  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
+#  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
+#
+#  tags = merge (local.common_tags, { Name = "${var.env}-${var.component}" } )
+#
+#}
+
+
+#resource "aws_ssm_parameter" "rabbitmq_endpoint" {
+#  name  = "${var.env}.rabbitmq.endpoint"
+#  type  = "String"
+#  value = replace(replace(aws_mq_broker.rabbitmq.instances.0.endpoints.0,"amqps://", ""), ":5671", "")
+#}
+
 // as our application code for rabbitmq  doesn't designed to deal with secured protocol of rabbitmq we are going with ec2 instance rather than the mq_broker
 
 #resource "aws_mq_broker" "rabbitmq" {
@@ -129,50 +173,4 @@ resource "aws_security_group" "rabbitmq" {
 #    username = data.aws_ssm_parameter.rabbitmq_ADMIN_USER.value
 #    password = data.aws_ssm_parameter.rabbitmq_ADMIN_USER.value
 #  }
-#}
-
-
-
-// spot request instance
-
-resource "aws_spot_instance_request" "rabbitmq_instance" {
-  ami = data.aws_ami.ami_id.image_id
-  instance_type = "t3.small"
-  subnet_id = var.subnet_ids[0]
-  wait_for_fulfillment = true
-  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
-  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
-  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
-
-  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_instance" } )
-
-}
-
-// on demand instance
-
-#resource "aws_instance" "rabbitmq_instance" {
-#  ami = data.aws_ami.ami_id.image_id
-#  instance_type = "t3.small"
-#  subnet_id = var.subnet_ids[0]
-#  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
-#  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
-#  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
-#
-#  tags = merge (local.common_tags, { Name = "${var.env}-${var.component}" } )
-#
-#}
-
-resource "aws_route53_record" "rabbitmq_DNS_record" {
-  zone_id = "Z0388000D98EZSBQJXAU"
-  name    = "rabbitmq-${var.env}.chandupcs.online"
-  type    = "A"
-  ttl     = 30
-  records = [aws_spot_instance_request.rabbitmq_instance.private_ip]
-}
-
-
-#resource "aws_ssm_parameter" "rabbitmq_endpoint" {
-#  name  = "${var.env}.rabbitmq.endpoint"
-#  type  = "String"
-#  value = replace(replace(aws_mq_broker.rabbitmq.instances.0.endpoints.0,"amqps://", ""), ":5671", "")
 #}
