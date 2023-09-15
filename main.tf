@@ -99,7 +99,7 @@ resource "aws_security_group" "rabbitmq" {
     ipv6_cidr_blocks = ["::/0"]
   }
 
-  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_subnet_group" } )
+  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_security_group" } )
 
 }
 
