@@ -10,4 +10,3 @@ variable "bastion_cidr" {}
 variable "component" {
   default = "rabbitmq"
 }
-variable "alb" {}
