@@ -102,29 +102,79 @@ resource "aws_security_group" "rabbitmq" {
   tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_security_group" } )
 
 }
+resource "aws_launch_template" "launch_template" {
+  name                   = "${var.env}-${var.component}-launch_template"
+  image_id               = data.aws_ami.ami_id.id
+  instance_type          = "t3.small"
+  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
+  user_data = base64encode(templatefile("${path.module}/user_data.sh",{ component= var.component, env= var.env }))
 
+  iam_instance_profile {
+    arn = aws_iam_instance_profile.para_instance_profile.arn
+  }
+
+  instance_market_options {
+    market_type = "spot"
+
+  }
+}
+resource "aws_autoscaling_group" "auto_scaling_group_rabbitmq" {
+  name                      = "${var.env}-${var.component}-autoscaling-group"
+  max_size                  = 2
+  min_size                  = 1
+  desired_capacity          = 1
+  force_delete              = true
+  vpc_zone_identifier       = var.subnet_ids
+
+  launch_template {
+    id = aws_launch_template.launch_template.id
+    version = "$Latest"
+  }
+
+  dynamic "tag" {
+    for_each              = local.all_tags
+    content {
+      key                 = tag.value.key
+      value               = tag.value.value
+      propagate_at_launch = true
+    }
+  }
+
+}
+
+resource "aws_autoscaling_policy" "cpu-tracking-policy" {
+  name        = "whenCPULoadIncrease"
+  policy_type = "TargetTrackingScaling"
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 30.0
+  }
+  autoscaling_group_name = aws_autoscaling_group.auto_scaling_group_rabbitmq.name
+}
 
 // spot request instance
 
-resource "aws_spot_instance_request" "rabbitmq_instance" {
-  ami = data.aws_ami.ami_id.image_id
-  instance_type = "t3.small"
-  subnet_id = var.subnet_ids[0]
-  wait_for_fulfillment = true
-  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
-  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
-  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
-
-  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_instance" } )
-
-}
+#resource "aws_spot_instance_request" "rabbitmq_instance" {
+#  ami = data.aws_ami.ami_id.image_id
+#  instance_type = "t3.small"
+#  subnet_id = var.subnet_ids[0]
+#  wait_for_fulfillment = true
+#  vpc_security_group_ids = [aws_security_group.rabbitmq.id]
+#  user_data = base64encode(templatefile("${path.module}/user_data.sh",{component="rabbitmq",env=var.env} ))
+#  iam_instance_profile = aws_iam_instance_profile.para_instance_profile.name
+#
+#  tags = merge (local.common_tags, { Name = "${var.env}-rabbitmq_instance" } )
+#
+#}
 
 resource "aws_route53_record" "rabbitmq_DNS_record" {
   zone_id = "Z0388000D98EZSBQJXAU"
   name    = "rabbitmq-${var.env}.chandupcs.online"
   type    = "A"
   ttl     = 30
-  records = [aws_spot_instance_request.rabbitmq_instance.private_ip]
+  records = [var.alb]
 }
 
 // on demand instance
