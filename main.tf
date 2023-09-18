@@ -115,7 +115,7 @@ resource "aws_instance" "rabbitmq_instance" {
 }
 
 resource "aws_route53_record" "rabbitmq_DNS_record" {
-  zone_id = "Z04623222IZKOJZ0BZ3PB"
+  zone_id = "Z0388000D98EZSBQJXAU"
   name    = "rabbitmq-${var.env}.chandupcs.online"
   type    = "A"
   ttl     = 30
